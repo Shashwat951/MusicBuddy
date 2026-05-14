@@ -1,0 +1,464 @@
+import tkinter as tk
+from tkinter import messagebox, filedialog
+import threading # For simulating playback in background
+import time
+
+# Assuming CustomPlaylistGenerator class is defined in the previous cell
+# and all_songs list is available from the previous cell's execution.
+
+class PlaylistApp:
+    def __init__(self, master, generator, available_songs):
+        self.master = master
+        master.title("Custom Playlist Generator")
+        master.geometry("600x950")
+
+        self.generator = generator
+        self.available_songs = available_songs
+        self.is_playing = False
+        self.playback_thread = None
+        self.current_theme = 'light' # Default theme
+
+        # --- Menu Bar ---
+        self.menubar = tk.Menu(master)
+        master.config(menu=self.menubar)
+
+        # File Menu
+        self.file_menu = tk.Menu(self.menubar, tearoff=0)
+        self.menubar.add_cascade(label="File", menu=self.file_menu)
+        self.file_menu.add_command(label="Save Playlist", command=self.save_playlist_gui)
+        self.file_menu.add_command(label="Load Playlist", command=self.load_playlist_gui)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="Exit", command=master.quit)
+
+        # Theme Menu
+        self.theme_menu = tk.Menu(self.menubar, tearoff=0)
+        self.menubar.add_cascade(label="Theme", menu=self.theme_menu)
+        self.theme_menu.add_command(label="Light Mode", command=lambda: self.apply_theme('light'))
+        self.theme_menu.add_command(label="Dark Mode", command=lambda: self.apply_theme('dark'))
+
+        # --- Output Log ----
+        self.log_label = tk.Label(master, text="Output Log:")
+        self.log_label.pack(pady=5)
+        self.log_text = tk.Text(master, height=8, width=70, state='disabled')
+        self.log_text.pack(pady=5)
+        self.log("Welcome to the Custom Playlist Generator!")
+
+        # --- Preferences Frame ---
+        self.pref_frame = tk.LabelFrame(master, text="Set Preferences")
+        self.pref_frame.pack(pady=10, padx=10, fill="x")
+
+        tk.Label(self.pref_frame, text="Genres (comma-separated): ").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        self.genres_entry = tk.Entry(self.pref_frame, width=50)
+        self.genres_entry.grid(row=0, column=1, padx=5, pady=2)
+
+        tk.Label(self.pref_frame, text="Artists (comma-separated): ").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        self.artists_entry = tk.Entry(self.pref_frame, width=50)
+        self.artists_entry.grid(row=1, column=1, padx=5, pady=2)
+
+        tk.Label(self.pref_frame, text="Moods (comma-separated): ").grid(row=2, column=0, sticky="w", padx=5, pady=2)
+        self.moods_entry = tk.Entry(self.pref_frame, width=50)
+        self.moods_entry.grid(row=2, column=1, padx=5, pady=2)
+
+        tk.Label(self.pref_frame, text="Tempo (e.g., 'any', 'fast', 'slow'): ").grid(row=3, column=0, sticky="w", padx=5, pady=2)
+        self.tempo_entry = tk.Entry(self.pref_frame, width=50)
+        self.tempo_entry.grid(row=3, column=1, padx=5, pady=2)
+        self.tempo_entry.insert(0, "any")
+
+        self.set_pref_button = tk.Button(self.pref_frame, text="Set Preferences", command=self.set_preferences_gui)
+        self.set_pref_button.grid(row=4, column=0, columnspan=2, pady=5)
+
+        # --- Generate Playlist Button ---
+        self.generate_button = tk.Button(master, text="Generate Playlist", command=self.generate_playlist_gui)
+        self.generate_button.pack(pady=5)
+
+        # --- Current Song Display ---
+        self.current_song_frame = tk.LabelFrame(master, text="Now Playing")
+        self.current_song_frame.pack(pady=10, padx=10, fill="x")
+
+        self.current_song_label = tk.Label(self.current_song_frame, text="No song playing.", wraplength=550)
+        self.current_song_label.pack(pady=5)
+
+        self.progress_bar = tk.Scale(self.current_song_frame, from_=0, to=100, orient=tk.HORIZONTAL,
+                                       label="Progress", state='disabled', length=550, showvalue=0)
+        self.progress_bar.pack(pady=5)
+
+        self.time_label = tk.Label(self.current_song_frame, text="0:00 / 0:00")
+        self.time_label.pack(pady=2)
+
+        # --- Playback Controls ---
+        self.playback_control_frame = tk.Frame(master)
+        self.playback_control_frame.pack(pady=5)
+
+        self.prev_button = tk.Button(self.playback_control_frame, text="<< Prev", command=self.previous_song_gui)
+        self.prev_button.grid(row=0, column=0, padx=5)
+
+        self.play_pause_button = tk.Button(self.playback_control_frame, text="Play", command=self.play_pause_gui)
+        self.play_pause_button.grid(row=0, column=1, padx=5)
+
+        self.next_button = tk.Button(self.playback_control_frame, text="Next >>", command=self.next_song_gui)
+        self.next_button.grid(row=0, column=2, padx=5)
+
+        self.volume_label = tk.Label(self.playback_control_frame, text="Volume:")
+        self.volume_label.grid(row=0, column=3, padx=5)
+
+        self.volume_slider = tk.Scale(self.playback_control_frame, from_=0, to=100, orient=tk.HORIZONTAL,
+                                       command=self.set_volume_gui, length=100)
+        self.volume_slider.set(50) # Default volume
+        self.volume_slider.grid(row=0, column=4, padx=5)
+
+        # --- Edit Genres Frame ---
+        self.edit_genre_frame = tk.LabelFrame(master, text="Edit Genres")
+        self.edit_genre_frame.pack(pady=10, padx=10, fill="x")
+
+        tk.Label(self.edit_genre_frame, text="Current Genre: ").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        self.current_genre_entry = tk.Entry(self.edit_genre_frame, width=30)
+        self.current_genre_entry.grid(row=0, column=1, padx=5, pady=2)
+
+        tk.Label(self.edit_genre_frame, text="New Keyword: ").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        self.new_genre_keyword_entry = tk.Entry(self.edit_genre_frame, width=30)
+        self.new_genre_keyword_entry.grid(row=1, column=1, padx=5, pady=2)
+
+        self.edit_genre_button = tk.Button(self.edit_genre_frame, text="Edit Genre", command=self.edit_genres_gui)
+        self.edit_genre_button.grid(row=2, column=0, columnspan=2, pady=5)
+
+        # --- Transition Timing Frame ---
+        self.transition_frame = tk.LabelFrame(master, text="Transition Timing")
+        self.transition_frame.pack(pady=10, padx=10, fill="x")
+
+        tk.Label(self.transition_frame, text="Transition (seconds): ").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        self.transition_entry = tk.Entry(self.transition_frame, width=20)
+        self.transition_entry.grid(row=0, column=1, padx=5, pady=2)
+        self.transition_entry.insert(0, "0") # Default to 0 seconds
+
+        self.set_transition_button = tk.Button(self.transition_frame, text="Set Transition", command=self.set_transition_timing_gui)
+        self.set_transition_button.grid(row=1, column=0, columnspan=2, pady=5)
+
+        # --- Artist Suggestions Frame ---
+        self.artist_suggestion_frame = tk.LabelFrame(master, text="Artist Suggestions")
+        self.artist_suggestion_frame.pack(pady=10, padx=10, fill="x")
+
+        self.suggest_artists_button = tk.Button(self.artist_suggestion_frame, text="Suggest Artists", command=self.suggest_artists_gui)
+        self.suggest_artists_button.pack(pady=5)
+
+        self.suggested_artists_text = tk.Text(self.artist_suggestion_frame, height=3, width=70, state='disabled', wrap='word')
+        self.suggested_artists_text.pack(pady=5)
+
+        # Apply initial theme
+        self.apply_theme(self.current_theme)
+        self.update_current_song_display() # Initial update
+
+    def log(self, message):
+        self.log_text.config(state='normal')
+        self.log_text.insert(tk.END, message + "\n")
+        self.log_text.see(tk.END) # Auto-scroll to the end
+        self.log_text.config(state='disabled')
+
+    def set_preferences_gui(self):
+        genres_str = self.genres_entry.get()
+        artists_str = self.artists_entry.get()
+        moods_str = self.moods_entry.get()
+        tempo = self.tempo_entry.get()
+
+        genres = [g.strip() for g in genres_str.split(',') if g.strip()] if genres_str else None
+        artists = [a.strip() for a in artists_str.split(',') if a.strip()] if artists_str else None
+        moods = [m.strip() for m in moods_str.split(',') if m.strip()] if moods_str else None
+
+        import sys
+        original_stdout = sys.stdout
+        sys.stdout = OutputRedirector(self.log)
+        self.generator.set_preferences(genres=genres, artists=artists, moods=moods, tempo=tempo)
+        sys.stdout = original_stdout # Restore stdout
+
+    def generate_playlist_gui(self):
+        has_new_preferences = False
+        if self.genres_entry.get().strip() or \
+           self.artists_entry.get().strip() or \
+           self.moods_entry.get().strip() or \
+           (self.tempo_entry.get().strip() and self.tempo_entry.get().strip() != "any"):
+            has_new_preferences = True
+
+        if has_new_preferences:
+            self.log("Detected unapplied preferences. Applying them now...")
+            self.set_preferences_gui()
+
+        import sys
+        original_stdout = sys.stdout
+        sys.stdout = OutputRedirector(self.log)
+        self.generator.generate_playlist(self.available_songs)
+        sys.stdout = original_stdout
+        self.update_current_song_display()
+
+    def edit_genres_gui(self):
+        current_genre = self.current_genre_entry.get().strip()
+        new_genre_keyword = self.new_genre_keyword_entry.get().strip()
+
+        if not current_genre or not new_genre_keyword:
+            messagebox.showwarning("Input Error", "Please enter both current genre and new keyword.")
+            return
+
+        self.log("Applying current preferences from GUI before editing genre...")
+        self.set_preferences_gui()
+
+        import sys
+        original_stdout = sys.stdout
+        sys.stdout = OutputRedirector(self.log)
+        self.generator.edit_genres(current_genre, new_genre_keyword)
+        sys.stdout = original_stdout
+
+        updated_genres = self.generator.user_preferences['genres']
+        self.genres_entry.delete(0, tk.END)
+        self.genres_entry.insert(0, ", ".join(updated_genres))
+
+    def set_transition_timing_gui(self):
+        try:
+            seconds = float(self.transition_entry.get())
+            import sys
+            original_stdout = sys.stdout
+            sys.stdout = OutputRedirector(self.log)
+            self.generator.set_transition_timing(seconds)
+            sys.stdout = original_stdout
+        except ValueError:
+            messagebox.showerror("Input Error", "Transition timing must be a number.")
+
+    def suggest_artists_gui(self):
+        has_new_preferences = False
+        if self.genres_entry.get().strip() or \
+           self.artists_entry.get().strip() or \
+           self.moods_entry.get().strip() or \
+           (self.tempo_entry.get().strip() and self.tempo_entry.get().strip() != "any"):
+            has_new_preferences = True
+
+        if has_new_preferences:
+            self.log("Detected unapplied preferences. Applying them before suggesting artists...")
+            self.set_preferences_gui()
+
+        import sys
+        original_stdout = sys.stdout
+        sys.stdout = OutputRedirector(self.log)
+        suggested = self.generator.suggest_artists(self.available_songs)
+        sys.stdout = original_stdout
+
+        self.suggested_artists_text.config(state='normal')
+        self.suggested_artists_text.delete(1.0, tk.END)
+        if suggested:
+            self.suggested_artists_text.insert(tk.END, ", ".join(suggested))
+        else:
+            self.suggested_artists_text.insert(tk.END, "No artists suggested based on current preferences.")
+        self.suggested_artists_text.config(state='disabled')
+
+    # --- New Playback Methods ---
+    def play_pause_gui(self):
+        if not self.generator.current_playlist:
+            self.log("Playlist is empty. Generate a playlist first.")
+            return
+
+        if self.is_playing:
+            self.is_playing = False
+            self.play_pause_button.config(text="Play")
+            self.log("Playback paused.")
+        else:
+            self.is_playing = True
+            self.play_pause_button.config(text="Pause")
+            self.log("Playback started.")
+            if self.playback_thread is None or not self.playback_thread.is_alive():
+                self.playback_thread = threading.Thread(target=self._play_playlist_thread)
+                self.playback_thread.start()
+
+    def _play_playlist_thread(self):
+        while self.is_playing and self.generator.current_playlist and self.generator.current_song_index < len(self.generator.current_playlist):
+            current_song = self.generator.current_playlist[self.generator.current_song_index]
+            self.log(f"Now playing: {current_song['title']} by {current_song['artist']}")
+            self.update_current_song_display()
+
+            duration = current_song.get('duration', 60) # Default to 60 seconds if no duration
+            start_time = time.time()
+            elapsed_time = 0
+
+            while self.is_playing and elapsed_time < duration:
+                time.sleep(0.1)
+                elapsed_time = time.time() - start_time
+                progress_percent = int((elapsed_time / duration) * 100)
+                self.master.after(0, lambda p=progress_percent: self.progress_bar.set(p))
+                self.master.after(0, lambda e=elapsed_time, d=duration: self.time_label.config(text=f"{self._format_time(e)} / {self._format_time(d)}"))
+
+            if self.is_playing: # If not paused explicitly, move to next song
+                self.generator.next_song()
+                if self.generator.current_song_index == -1: # End of playlist
+                    self.is_playing = False
+                    self.play_pause_button.config(text="Play")
+                    self.log("Playlist finished.")
+                    self.master.after(0, self.update_current_song_display)
+
+        self.is_playing = False # Ensure button state is 'Play' if thread ends
+        self.master.after(0, lambda: self.play_pause_button.config(text="Play"))
+
+    def next_song_gui(self):
+        if self.generator.next_song():
+            self.log("Skipping to next song.")
+            self.is_playing = False # Stop current playback thread
+            self.play_pause_button.config(text="Play") # Update button state
+            self.master.after(100, self.play_pause_gui) # Restart playing from new song
+        else:
+            self.log("No next song in playlist.")
+            self.is_playing = False
+            self.play_pause_button.config(text="Play")
+            self.update_current_song_display()
+
+    def previous_song_gui(self):
+        if self.generator.previous_song():
+            self.log("Going to previous song.")
+            self.is_playing = False # Stop current playback thread
+            self.play_pause_button.config(text="Play") # Update button state
+            self.master.after(100, self.play_pause_gui) # Restart playing from new song
+        else:
+            self.log("No previous song in playlist.")
+            self.is_playing = False
+            self.play_pause_button.config(text="Play")
+            self.update_current_song_display()
+
+    def update_current_song_display(self):
+        if self.generator.current_playlist and self.generator.current_song_index != -1:
+            song = self.generator.current_playlist[self.generator.current_song_index]
+            self.current_song_label.config(text=f"Title: {song['title']}\nArtist: {song['artist']}\nGenre: {song['genre']}")
+            duration = song.get('duration', 0)
+            self.progress_bar.config(to=duration, state='normal')
+            self.progress_bar.set(0)
+            self.time_label.config(text=f"0:00 / {self._format_time(duration)}")
+        else:
+            self.current_song_label.config(text="No song playing.")
+            self.progress_bar.config(to=100, state='disabled')
+            self.progress_bar.set(0)
+            self.time_label.config(text="0:00 / 0:00")
+
+    def set_volume_gui(self, val):
+        # In a real app, this would control the audio library's volume
+        volume = int(val)
+        self.log(f"Volume set to {volume}%")
+
+    def _format_time(self, seconds):
+        mins = int(seconds // 60)
+        secs = int(seconds % 60)
+        return f"{mins:02d}:{secs:02d}"
+
+    # --- New File I/O Methods ---
+    def save_playlist_gui(self):
+        if not self.generator.current_playlist:
+            messagebox.showwarning("Save Playlist", "No playlist to save. Generate one first.")
+            return
+        filepath = filedialog.asksaveasfilename(defaultextension=".json",
+                                                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                                                title="Save Playlist As")
+        if filepath:
+            if self.generator.save_playlist(filepath):
+                self.log(f"Playlist saved to {filepath}")
+            else:
+                self.log(f"Failed to save playlist to {filepath}")
+
+    def load_playlist_gui(self):
+        filepath = filedialog.askopenfilename(defaultextension=".json",
+                                               filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                                               title="Load Playlist")
+        if filepath:
+            if self.generator.load_playlist(filepath):
+                self.log(f"Playlist loaded from {filepath}")
+                self.update_current_song_display()
+                self.is_playing = False # Reset playback state
+                self.play_pause_button.config(text="Play")
+            else:
+                self.log(f"Failed to load playlist from {filepath}")
+
+    def apply_theme(self, theme_name):
+        self.current_theme = theme_name
+        if theme_name == 'light':
+            bg_color = "#f0f0f0"
+            fg_color = "#000000"
+            frame_bg = "#e0e0e0"
+            entry_bg = "#ffffff"
+            entry_fg = "#000000"
+            button_bg = "#d0d0d0"
+            button_fg = "#000000"
+            # Specific colors for progress bar and slider
+            trough_color = "#c0c0c0"
+            slider_color = "#808080"
+        elif theme_name == 'dark':
+            bg_color = "#333333"
+            fg_color = "#ffffff"
+            frame_bg = "#444444"
+            entry_bg = "#555555"
+            entry_fg = "#ffffff"
+            button_bg = "#666666"
+            button_fg = "#ffffff"
+            # Specific colors for progress bar and slider
+            trough_color = "#222222"
+            slider_color = "#888888"
+        else:
+            return
+
+        self.master.config(bg=bg_color)
+
+        for frame in [self.pref_frame, self.edit_genre_frame, self.transition_frame, self.artist_suggestion_frame, self.current_song_frame]:
+            frame.config(bg=frame_bg, fg=fg_color)
+
+        for widget in self.master.winfo_children():
+            if isinstance(widget, tk.LabelFrame):
+                widget.config(bg=frame_bg, fg=fg_color)
+                for child in widget.winfo_children():
+                    if isinstance(child, tk.Label):
+                        child.config(bg=frame_bg, fg=fg_color)
+            elif isinstance(widget, tk.Label):
+                widget.config(bg=bg_color, fg=fg_color)
+
+        self.log_label.config(bg=bg_color, fg=fg_color)
+        self.current_song_label.config(bg=frame_bg, fg=fg_color)
+        self.time_label.config(bg=frame_bg, fg=fg_color)
+        self.volume_label.config(bg=bg_color, fg=fg_color)
+
+        self.log_text.config(bg=entry_bg, fg=entry_fg, insertbackground=entry_fg)
+        self.suggested_artists_text.config(bg=entry_bg, fg=entry_fg, insertbackground=entry_fg)
+
+        for entry in [self.genres_entry, self.artists_entry, self.moods_entry, self.tempo_entry,
+                      self.current_genre_entry, self.new_genre_keyword_entry, self.transition_entry]:
+            entry.config(bg=entry_bg, fg=entry_fg, insertbackground=entry_fg)
+
+        for button in [self.set_pref_button, self.generate_button, self.edit_genre_button,
+                       self.set_transition_button, self.suggest_artists_button, self.prev_button, self.play_pause_button, self.next_button]:
+            button.config(bg=button_bg, fg=button_fg, activebackground=button_bg, activeforeground=button_fg)
+
+        # Apply theme to scales
+        self.progress_bar.config(bg=frame_bg, fg=fg_color, troughcolor=trough_color, activebackground=slider_color)
+        self.volume_slider.config(bg=bg_color, fg=fg_color, troughcolor=trough_color, activebackground=slider_color)
+
+        # Apply theme to general frames
+        self.playback_control_frame.config(bg=bg_color)
+
+# Helper class to redirect print statements to the Tkinter Text widget
+class OutputRedirector(object):
+    def __init__(self, text_widget_logger):
+        self.text_widget_logger = text_widget_logger
+
+    def write(self, st):
+        if st.strip():
+            self.text_widget_logger(st.strip())
+
+    def flush(self):
+        pass
+
+# --- Run the GUI ---
+if __name__ == "__main__":
+    messagebox.showinfo("GUI Information", "The GUI cannot be displayed directly in Google Colab. Please run this code in a local Python environment with Tkinter installed to interact with the GUI.")
+
+    # root = tk.Tk()
+    playlist_generator_instance = CustomPlaylistGenerator()
+    # Ensure all_songs is available from the previous cell's execution
+    all_songs = [
+        {"id": "s1", "title": "Summer Vibes", "artist": "Artist A", "genre": "Pop", "mood": "Happy", "duration": 180},
+        {"id": "s2", "title": "Melancholy Tune", "artist": "Artist B", "genre": "Acoustic", "mood": "Sad", "duration": 210},
+        {"id": "s3", "title": "Upbeat Dance", "artist": "Artist C", "genre": "Electronic", "mood": "Energetic", "duration": 200},
+        {"id": "s4", "title": "Smooth Jazz Night", "artist": "Artist D", "genre": "Jazz", "mood": "Relaxed", "duration": 240},
+        {"id": "s5", "title": "Rock Anthem", "artist": "Artist E", "genre": "Rock", "mood": "Energetic", "duration": 190},
+        {"id": "s6", "title": "Chillwave Dreams", "artist": "Artist F", "genre": "Electronic", "mood": "Relaxed", "duration": 220},
+        {"id": "s7", "title": "Folk Ballad", "artist": "Artist G", "genre": "Acoustic", "mood": "Calm", "duration": 205}
+    ]
+
+    # app = PlaylistApp(root, playlist_generator_instance, all_songs)
+    # root.mainloop()
