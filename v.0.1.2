@@ -10,13 +10,32 @@ class PlaylistApp:
     def __init__(self, master, generator, available_songs):
         self.master = master
         master.title("Custom Playlist Generator")
-        master.geometry("600x950")
+        # master.geometry("600x1250") # Removed fixed geometry to allow scrolling
 
         self.generator = generator
         self.available_songs = available_songs
         self.is_playing = False
         self.playback_thread = None
         self.current_theme = 'light' # Default theme
+
+        # --- Setup Scrollable Frame ---
+        self.main_canvas = tk.Canvas(master)
+        self.main_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.scrollbar = tk.Scrollbar(master, orient=tk.VERTICAL, command=self.main_canvas.yview)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.main_canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.main_canvas.bind('<Configure>', lambda e: self.main_canvas.configure(scrollregion = self.main_canvas.bbox("all")))
+
+        self.scrollable_frame = tk.Frame(self.main_canvas)
+        self.main_canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw", tags="self.scrollable_frame")
+
+        # Bind mouse wheel to scroll
+        self.scrollable_frame.bind("<Configure>", lambda e: self.main_canvas.configure(scrollregion=self.main_canvas.bbox("all")))
+        self.main_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+
+        # All widgets will now be packed into self.scrollable_frame
 
         # --- Menu Bar ---
         self.menubar = tk.Menu(master)
@@ -37,14 +56,14 @@ class PlaylistApp:
         self.theme_menu.add_command(label="Dark Mode", command=lambda: self.apply_theme('dark'))
 
         # --- Output Log ----
-        self.log_label = tk.Label(master, text="Output Log:")
+        self.log_label = tk.Label(self.scrollable_frame, text="Output Log:")
         self.log_label.pack(pady=5)
-        self.log_text = tk.Text(master, height=8, width=70, state='disabled')
+        self.log_text = tk.Text(self.scrollable_frame, height=8, width=70, state='disabled')
         self.log_text.pack(pady=5)
         self.log("Welcome to the Custom Playlist Generator!")
 
         # --- Preferences Frame ---
-        self.pref_frame = tk.LabelFrame(master, text="Set Preferences")
+        self.pref_frame = tk.LabelFrame(self.scrollable_frame, text="Set Preferences")
         self.pref_frame.pack(pady=10, padx=10, fill="x")
 
         tk.Label(self.pref_frame, text="Genres (comma-separated): ").grid(row=0, column=0, sticky="w", padx=5, pady=2)
@@ -68,11 +87,11 @@ class PlaylistApp:
         self.set_pref_button.grid(row=4, column=0, columnspan=2, pady=5)
 
         # --- Generate Playlist Button ---
-        self.generate_button = tk.Button(master, text="Generate Playlist", command=self.generate_playlist_gui)
+        self.generate_button = tk.Button(self.scrollable_frame, text="Generate Playlist", command=self.generate_playlist_gui)
         self.generate_button.pack(pady=5)
 
         # --- Current Song Display ---
-        self.current_song_frame = tk.LabelFrame(master, text="Now Playing")
+        self.current_song_frame = tk.LabelFrame(self.scrollable_frame, text="Now Playing")
         self.current_song_frame.pack(pady=10, padx=10, fill="x")
 
         self.current_song_label = tk.Label(self.current_song_frame, text="No song playing.", wraplength=550)
@@ -86,7 +105,7 @@ class PlaylistApp:
         self.time_label.pack(pady=2)
 
         # --- Playback Controls ---
-        self.playback_control_frame = tk.Frame(master)
+        self.playback_control_frame = tk.Frame(self.scrollable_frame)
         self.playback_control_frame.pack(pady=5)
 
         self.prev_button = tk.Button(self.playback_control_frame, text="<< Prev", command=self.previous_song_gui)
@@ -107,7 +126,7 @@ class PlaylistApp:
         self.volume_slider.grid(row=0, column=4, padx=5)
 
         # --- Edit Genres Frame ---
-        self.edit_genre_frame = tk.LabelFrame(master, text="Edit Genres")
+        self.edit_genre_frame = tk.LabelFrame(self.scrollable_frame, text="Edit Genres")
         self.edit_genre_frame.pack(pady=10, padx=10, fill="x")
 
         tk.Label(self.edit_genre_frame, text="Current Genre: ").grid(row=0, column=0, sticky="w", padx=5, pady=2)
@@ -122,7 +141,7 @@ class PlaylistApp:
         self.edit_genre_button.grid(row=2, column=0, columnspan=2, pady=5)
 
         # --- Transition Timing Frame ---
-        self.transition_frame = tk.LabelFrame(master, text="Transition Timing")
+        self.transition_frame = tk.LabelFrame(self.scrollable_frame, text="Transition Timing")
         self.transition_frame.pack(pady=10, padx=10, fill="x")
 
         tk.Label(self.transition_frame, text="Transition (seconds): ").grid(row=0, column=0, sticky="w", padx=5, pady=2)
@@ -134,7 +153,7 @@ class PlaylistApp:
         self.set_transition_button.grid(row=1, column=0, columnspan=2, pady=5)
 
         # --- Artist Suggestions Frame ---
-        self.artist_suggestion_frame = tk.LabelFrame(master, text="Artist Suggestions")
+        self.artist_suggestion_frame = tk.LabelFrame(self.scrollable_frame, text="Artist Suggestions")
         self.artist_suggestion_frame.pack(pady=10, padx=10, fill="x")
 
         self.suggest_artists_button = tk.Button(self.artist_suggestion_frame, text="Suggest Artists", command=self.suggest_artists_gui)
@@ -146,6 +165,9 @@ class PlaylistApp:
         # Apply initial theme
         self.apply_theme(self.current_theme)
         self.update_current_song_display() # Initial update
+
+    def _on_mousewheel(self, event):
+        self.main_canvas.yview_scroll(-1*(event.delta//120), "units")
 
     def log(self, message):
         self.log_text.config(state='normal')
@@ -403,20 +425,19 @@ class PlaylistApp:
 
         for frame in [self.pref_frame, self.edit_genre_frame, self.transition_frame, self.artist_suggestion_frame, self.current_song_frame]:
             frame.config(bg=frame_bg, fg=fg_color)
+            for child in frame.winfo_children(): # Apply to children within LabelFrames
+                if isinstance(child, tk.Label):
+                    child.config(bg=frame_bg, fg=fg_color)
 
-        for widget in self.master.winfo_children():
-            if isinstance(widget, tk.LabelFrame):
-                widget.config(bg=frame_bg, fg=fg_color)
-                for child in widget.winfo_children():
-                    if isinstance(child, tk.Label):
-                        child.config(bg=frame_bg, fg=fg_color)
-            elif isinstance(widget, tk.Label):
-                widget.config(bg=bg_color, fg=fg_color)
-
-        self.log_label.config(bg=bg_color, fg=fg_color)
+        # Apply theme to other direct widgets in the scrollable_frame
+        self.log_label.config(bg=self.master.cget('bg'), fg=fg_color) # Corrected: use self.master
         self.current_song_label.config(bg=frame_bg, fg=fg_color)
         self.time_label.config(bg=frame_bg, fg=fg_color)
-        self.volume_label.config(bg=bg_color, fg=fg_color)
+
+        # Correctly apply colors to labels that are direct children of scrollable_frame
+        for widget in self.scrollable_frame.winfo_children():
+            if isinstance(widget, tk.Label) and widget not in [self.log_label, self.current_song_label, self.time_label]:
+                widget.config(bg=bg_color, fg=fg_color)
 
         self.log_text.config(bg=entry_bg, fg=entry_fg, insertbackground=entry_fg)
         self.suggested_artists_text.config(bg=entry_bg, fg=entry_fg, insertbackground=entry_fg)
