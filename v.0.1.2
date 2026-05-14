@@ -445,9 +445,7 @@ class OutputRedirector(object):
 
 # --- Run the GUI ---
 if __name__ == "__main__":
-    messagebox.showinfo("GUI Information", "The GUI cannot be displayed directly in Google Colab. Please run this code in a local Python environment with Tkinter installed to interact with the GUI.")
-
-    # root = tk.Tk()
+    root = tk.Tk()
     playlist_generator_instance = CustomPlaylistGenerator()
     # Ensure all_songs is available from the previous cell's execution
     all_songs = [
@@ -460,5 +458,5 @@ if __name__ == "__main__":
         {"id": "s7", "title": "Folk Ballad", "artist": "Artist G", "genre": "Acoustic", "mood": "Calm", "duration": 205}
     ]
 
-    # app = PlaylistApp(root, playlist_generator_instance, all_songs)
-    # root.mainloop()
+    app = PlaylistApp(root, playlist_generator_instance, all_songs)
+    root.mainloop()
