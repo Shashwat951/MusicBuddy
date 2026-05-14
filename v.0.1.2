@@ -282,6 +282,11 @@ class PlaylistApp:
                 self.master.after(0, lambda e=elapsed_time, d=duration: self.time_label.config(text=f"{self._format_time(e)} / {self._format_time(d)}"))
 
             if self.is_playing: # If not paused explicitly, move to next song
+                # Apply transition timing
+                if self.generator.transition_timing > 0:
+                    self.log(f"Transitioning for {self.generator.transition_timing} seconds...")
+                    time.sleep(self.generator.transition_timing)
+
                 self.generator.next_song()
                 if self.generator.current_song_index == -1: # End of playlist
                     self.is_playing = False
