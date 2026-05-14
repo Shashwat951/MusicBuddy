@@ -1,1 +1,77 @@
+import tkinter as tk
+from tkinter import messagebox
 
+class PlaylistApp:
+    def __init__(self, master, generator, available_songs):
+        self.master = master
+        master.title("Playlist Generator")
+        master.geometry("400x350")
+
+        self.generator = generator
+        self.available_songs = available_songs
+
+        self.pref_frame = tk.LabelFrame(master, text="Set Preferences")
+        self.pref_frame.pack(pady=10, padx=10, fill="x")
+
+        tk.Label(self.pref_frame, text="Genres (comma-separated): ").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        self.genres_entry = tk.Entry(self.pref_frame, width=40)
+        self.genres_entry.grid(row=0, column=1, padx=5, pady=2)
+
+        tk.Label(self.pref_frame, text="Moods (comma-separated): ").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        self.moods_entry = tk.Entry(self.pref_frame, width=40)
+        self.moods_entry.grid(row=1, column=1, padx=5, pady=2)
+
+        self.set_pref_button = tk.Button(self.pref_frame, text="Set Preferences", command=self.set_preferences_gui)
+        self.set_pref_button.grid(row=2, column=0, columnspan=2, pady=5)
+
+        self.generate_button = tk.Button(master, text="Generate Playlist", command=self.generate_playlist_gui)
+        self.generate_button.pack(pady=10)
+
+        self.current_song_frame = tk.LabelFrame(master, text="Current Playlist")
+        self.current_song_frame.pack(pady=10, padx=10, fill="x")
+
+        self.playlist_display = tk.Text(self.current_song_frame, height=5, width=40, state='disabled')
+        self.playlist_display.pack(pady=5)
+
+    def log(self, message):
+        print(message)
+
+    def set_preferences_gui(self):
+        genres_str = self.genres_entry.get()
+        moods_str = self.moods_entry.get()
+
+        genres = [g.strip() for g in genres_str.split(',') if g.strip()] if genres_str else None
+        moods = [m.strip() for m in moods_str.split(',') if m.strip()] if moods_str else None
+
+        self.generator.set_preferences(genres=genres, moods=moods)
+        messagebox.showinfo("Preferences", "Preferences updated!")
+
+    def generate_playlist_gui(self):
+        self.generator.generate_playlist(self.available_songs)
+        self.update_playlist_display()
+
+    def update_playlist_display(self):
+        self.playlist_display.config(state='normal')
+        self.playlist_display.delete(1.0, tk.END)
+        if self.generator.current_playlist:
+            for i, song in enumerate(self.generator.current_playlist):
+                self.playlist_display.insert(tk.END, f"{i+1}. {song['title']} by {song['artist']}\n")
+        else:
+            self.playlist_display.insert(tk.END, "No playlist generated yet.")
+        self.playlist_display.config(state='disabled')
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    playlist_generator_instance = CustomPlaylistGenerator()
+    all_songs = [
+        {"id": "s1", "title": "Summer Vibes", "artist": "Artist A", "genre": "Pop", "mood": "Happy", "duration": 180},
+        {"id": "s2", "title": "Melancholy Tune", "artist": "Artist B", "genre": "Acoustic", "mood": "Sad", "duration": 210},
+        {"id": "s3", "title": "Upbeat Dance", "artist": "Artist C", "genre": "Electronic", "mood": "Energetic", "duration": 200},
+        {"id": "s4", "title": "Smooth Jazz Night", "artist": "Artist D", "genre": "Jazz", "mood": "Relaxed", "duration": 240},
+        {"id": "s5", "title": "Rock Anthem", "artist": "Artist E", "genre": "Rock", "mood": "Energetic", "duration": 190},
+        {"id": "s6", "title": "Chillwave Dreams", "artist": "Artist F", "genre": "Electronic", "mood": "Relaxed", "duration": 220},
+        {"id": "s7", "title": "Folk Ballad", "artist": "Artist G", "genre": "Acoustic", "mood": "Calm", "duration": 205}
+    ]
+
+    app = PlaylistApp(root, playlist_generator_instance, all_songs)
+    root.mainloop()
