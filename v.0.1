@@ -1,0 +1,136 @@
+import random
+import time
+
+class CustomPlaylistGenerator:
+    def __init__(self):
+        self.user_preferences = {
+            "genres": [],
+            "artists": [],
+            "moods": [],
+            "tempo": "any"
+        }
+        self.current_playlist = []
+        self.transition_timing = 0 # seconds for smooth transition
+
+    def set_preferences(self, genres=None, artists=None, moods=None, tempo=None):
+        """Allows the user to set their playlist preferences."""
+        if genres:
+            self.user_preferences["genres"] = list(set(genres))
+        if artists:
+            self.user_preferences["artists"] = list(set(artists))
+        if moods:
+            self.user_preferences["moods"] = list(set(moods))
+        if tempo:
+            self.user_preferences["tempo"] = tempo
+        print(f"User preferences updated: {self.user_preferences}")
+
+    def generate_playlist(self, available_songs):
+        """Generates a custom playlist based on user preferences."""
+        print("Generating playlist based on preferences...")
+        # --- Placeholder for actual playlist generation logic ----
+        # This is where you would filter 'available_songs' based on 'self.user_preferences'
+        # For now, let's just pick some random songs as a placeholder.
+
+        if not available_songs:
+            print("No available songs to generate a playlist from.")
+            self.current_playlist = []
+            return
+
+        # Simulate picking 5 random songs
+        self.current_playlist = random.sample(available_songs, min(5, len(available_songs)))
+        print(f"Playlist generated: {[song['title'] for song in self.current_playlist]}")
+        # ---------------------------------------------------------
+
+    def edit_genres(self, current_genre, new_genre_keyword):
+        """Edits genres using keywords in user preferences."""
+        print(f"Attempting to edit genre '{current_genre}' with keyword '{new_genre_keyword}'...")
+        # --- Placeholder for actual genre editing logic ----
+        # You would implement logic here to find and replace/add genres
+        # based on 'new_genre_keyword'.
+        # Example: if current_genre exists, replace it, or add new_genre_keyword
+
+        if current_genre in self.user_preferences["genres"]:
+            self.user_preferences["genres"].remove(current_genre)
+            self.user_preferences["genres"].append(new_genre_keyword)
+            self.user_preferences["genres"] = list(set(self.user_preferences["genres"]))
+            print(f"Genre '{current_genre}' updated to '{new_genre_keyword}'. New genres: {self.user_preferences['genres']}")
+        else:
+            print(f"Genre '{current_genre}' not found in preferences. Adding '{new_genre_keyword}'.")
+            self.user_preferences["genres"].append(new_genre_keyword)
+            self.user_preferences["genres"] = list(set(self.user_preferences["genres"]))
+        # ---------------------------------------------------------
+
+    def set_transition_timing(self, seconds):
+        """Sets the duration for smooth transitions between songs."""
+        if isinstance(seconds, (int, float)) and seconds >= 0:
+            self.transition_timing = seconds
+            print(f"Smooth transition timing set to {self.transition_timing} seconds.")
+        else:
+            print("Invalid transition timing. Please provide a non-negative number.")
+
+    def play_playlist(self):
+        """Simulates playing the playlist with smooth transitions."""
+        if not self.current_playlist:
+            print("Playlist is empty. Please generate a playlist first.")
+            return
+
+        print("Playing playlist with smooth transitions...")
+        for i, song in enumerate(self.current_playlist):
+            print(f"Now playing: {song['title']} by {song['artist']}")
+            # --- Placeholder for actual audio playback and transition logic ---
+            # In a real application, you would integrate with an audio library (e.g., Pygame, pydub)
+            # to fade out the current song and fade in the next one over 'self.transition_timing'.
+
+            # Simulate song duration
+            time.sleep(3) # Simulate 3 seconds of song play for demonstration
+
+            if i < len(self.current_playlist) - 1:
+                print(f"Preparing for smooth transition to next song in {self.transition_timing} seconds...")
+                time.sleep(self.transition_timing) # Simulate transition period
+            # -------------------------------------------------------------------
+        print("Playlist finished.")
+
+# --- Example Usage ----
+if __name__ == "__main__":
+    # Dummy data for available songs
+    all_songs = [
+        {"id": "s1", "title": "Summer Vibes", "artist": "Artist A", "genre": "Pop", "mood": "Happy"},
+        {"id": "s2", "title": "Melancholy Tune", "artist": "Artist B", "genre": "Acoustic", "mood": "Sad"},
+        {"id": "s3", "title": "Upbeat Dance", "artist": "Artist C", "genre": "Electronic", "mood": "Energetic"},
+        {"id": "s4", "title": "Smooth Jazz Night", "artist": "Artist D", "genre": "Jazz", "mood": "Relaxed"},
+        {"id": "s5", "title": "Rock Anthem", "artist": "Artist E", "genre": "Rock", "mood": "Energetic"},
+        {"id": "s6", "title": "Chillwave Dreams", "artist": "Artist F", "genre": "Electronic", "mood": "Relaxed"},
+        {"id": "s7", "title": "Folk Ballad", "artist": "Artist G", "genre": "Acoustic", "mood": "Calm"}
+    ]
+
+    playlist_app = CustomPlaylistGenerator()
+
+    # 1. Set initial preferences
+    print("\n--- Setting Initial Preferences ---")
+    playlist_app.set_preferences(genres=["Pop", "Electronic"], moods=["Happy", "Energetic"])
+
+    # 2. Generate a playlist
+    print("\n--- Generating Playlist ---")
+    playlist_app.generate_playlist(all_songs)
+
+    # 3. Edit genres using keywords
+    print("\n--- Editing Genres ---")
+    playlist_app.edit_genres("Pop", "Indie Pop")
+    playlist_app.edit_genres("Rock", "Classic Rock") # Adding a new genre that wasn't there before
+
+    # Re-generate playlist after genre changes (optional, but good for demonstrating effect)
+    print("\n--- Re-generating Playlist after Genre Edit ---")
+    playlist_app.generate_playlist(all_songs)
+
+    # 4. Set smooth transition timing
+    print("\n--- Setting Transition Timing ---")
+    playlist_app.set_transition_timing(2.5) # 2.5 second transition
+
+    # 5. Play the playlist with transitions
+    print("\n--- Playing Playlist ---")
+    playlist_app.play_playlist()
+
+    # Example with no playlist
+    print("\n--- Playing Empty Playlist Example ---")
+    empty_playlist_app = CustomPlaylistGenerator()
+    empty_playlist_app.play_playlist()
