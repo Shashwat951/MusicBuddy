@@ -1,1 +1,216 @@
+import random
+import time
+import json # Import json for saving/loading playlists
 
+class CustomPlaylistGenerator:
+    def __init__(self):
+        self.user_preferences = {
+            "genres": [],
+            "artists": [],
+            "moods": [],
+            "tempo": "any"
+        }
+        self.current_playlist = []
+        self.transition_timing = 0 # seconds for smooth transition
+        self.current_song_index = -1 # -1 means no song is currently playing
+
+    def set_preferences(self, genres=None, artists=None, moods=None, tempo=None):
+        """Allows the user to set their playlist preferences."""
+        if genres:
+            self.user_preferences["genres"] = list(set(genres))
+        if artists:
+            self.user_preferences["artists"] = list(set(artists))
+        if moods:
+            self.user_preferences["moods"] = list(set(moods))
+        if tempo:
+            self.user_preferences["tempo"] = tempo
+        print(f"User preferences updated: {self.user_preferences}")
+
+    def generate_playlist(self, available_songs):
+        """Generates a custom playlist based on user preferences."""
+        print("Generating playlist based on preferences...")
+        # --- Placeholder for actual playlist generation logic ----
+        # This is where you would filter 'available_songs' based on 'self.user_preferences'
+        # For now, let's just pick some random songs as a placeholder.
+
+        filtered_songs = []
+        for song in available_songs:
+            match_genre = not self.user_preferences["genres"] or any(g.lower() in song["genre"].lower() for g in self.user_preferences["genres"])
+            match_mood = not self.user_preferences["moods"] or any(m.lower() in song["mood"].lower() for m in self.user_preferences["moods"])
+            # Add more sophisticated tempo matching if 'tempo' is extracted from songs
+
+            if match_genre and match_mood:
+                filtered_songs.append(song)
+
+        if not filtered_songs:
+            print("No songs match current preferences. Try adjusting them.")
+            self.current_playlist = []
+            self.current_song_index = -1
+            return
+
+        # Simulate picking 5 random songs from filtered list
+        self.current_playlist = random.sample(filtered_songs, min(5, len(filtered_songs)))
+        print(f"Playlist generated: {[song['title'] for song in self.current_playlist]}")
+        self.current_song_index = 0 if self.current_playlist else -1
+        # ---------------------------------------------------------
+
+    def edit_genres(self, current_genre, new_genre_keyword):
+        """Edits genres using keywords in user preferences."""
+        print(f"Attempting to edit genre '{current_genre}' with keyword '{new_genre_keyword}'...")
+
+        if current_genre in self.user_preferences["genres"]:
+            self.user_preferences["genres"].remove(current_genre)
+            self.user_preferences["genres"].append(new_genre_keyword)
+            self.user_preferences["genres"] = list(set(self.user_preferences["genres"]))
+            print(f"Genre '{current_genre}' updated to '{new_genre_keyword}'. New genres: {self.user_preferences['genres']}")
+        else:
+            print(f"Genre '{current_genre}' not found in preferences. Adding '{new_genre_keyword}'.")
+            self.user_preferences["genres"].append(new_genre_keyword)
+            self.user_preferences["genres"] = list(set(self.user_preferences["genres"]))
+
+    def set_transition_timing(self, seconds):
+        """Sets the duration for smooth transitions between songs."""
+        if isinstance(seconds, (int, float)) and seconds >= 0:
+            self.transition_timing = seconds
+            print(f"Smooth transition timing set to {self.transition_timing} seconds.")
+        else:
+            print("Invalid transition timing. Please provide a non-negative number.")
+
+    def play_playlist(self):
+        """Simulates playing the playlist with smooth transitions."""
+        if not self.current_playlist:
+            print("Playlist is empty. Please generate a playlist first.")
+            return
+
+        if self.current_song_index == -1:
+            print("No song selected to play.")
+            return
+
+        # For GUI, actual playing logic will be handled by UI controls.
+        # This method in the backend class can be simplified or adapted.
+        print(f"Now playing (simulated): {self.current_playlist[self.current_song_index]['title']} by {self.current_playlist[self.current_song_index]['artist']}")
+        # Simulate song duration, but in GUI this will be controlled differently
+        time.sleep(1) # Simulate 1 second of song play for demonstration
+
+    def next_song(self):
+        if self.current_playlist and self.current_song_index < len(self.current_playlist) - 1:
+            self.current_song_index += 1
+            print(f"Moving to next song: {self.current_playlist[self.current_song_index]['title']}")
+            return True
+        print("No next song in playlist.")
+        return False
+
+    def previous_song(self):
+        if self.current_song_index > 0:
+            self.current_song_index -= 1
+            print(f"Moving to previous song: {self.current_playlist[self.current_song_index]['title']}")
+            return True
+        print("No previous song in playlist.")
+        return False
+
+    def suggest_artists(self, available_songs):
+        """Suggests artists based on current user preferences."""
+        print("Suggesting artists based on current preferences...")
+        matching_artists = set()
+        for song in available_songs:
+            match_genre = not self.user_preferences["genres"] or any(g.lower() in song["genre"].lower() for g in self.user_preferences["genres"])
+            match_mood = not self.user_preferences["moods"] or any(m.lower() in song["mood"].lower() for m in self.user_preferences["moods"])
+            # Add tempo matching here if applicable
+
+            if match_genre and match_mood:
+                matching_artists.add(song["artist"])
+
+        if matching_artists:
+            print(f"Suggested artists: {', '.join(sorted(list(matching_artists)))}")
+            return sorted(list(matching_artists))
+        else:
+            print("No artists found matching current preferences.")
+            return []
+
+    def save_playlist(self, filepath):
+        """Saves the current playlist to a JSON file."""
+        try:
+            with open(filepath, 'w') as f:
+                json.dump(self.current_playlist, f, indent=4)
+            print(f"Playlist saved to {filepath}")
+            return True
+        except Exception as e:
+            print(f"Error saving playlist: {e}")
+            return False
+
+    def load_playlist(self, filepath):
+        """Loads a playlist from a JSON file and sets it as the current playlist."""
+        try:
+            with open(filepath, 'r') as f:
+                loaded_playlist = json.load(f)
+            self.current_playlist = loaded_playlist
+            self.current_song_index = 0 if self.current_playlist else -1
+            print(f"Playlist loaded from {filepath}. Contains: {[song['title'] for song in self.current_playlist]}")
+            return True
+        except FileNotFoundError:
+            print(f"Error: File not found at {filepath}")
+            return False
+        except json.JSONDecodeError:
+            print(f"Error: Invalid JSON format in {filepath}")
+            return False
+        except Exception as e:
+            print(f"Error loading playlist: {e}")
+            return False
+
+# --- Example Usage ----
+if __name__ == "__main__":
+    # Dummy data for available songs
+    all_songs = [
+        {"id": "s1", "title": "Summer Vibes", "artist": "Artist A", "genre": "Pop", "mood": "Happy", "duration": 180},
+        {"id": "s2", "title": "Melancholy Tune", "artist": "Artist B", "genre": "Acoustic", "mood": "Sad", "duration": 210},
+        {"id": "s3", "title": "Upbeat Dance", "artist": "Artist C", "genre": "Electronic", "mood": "Energetic", "duration": 200},
+        {"id": "s4", "title": "Smooth Jazz Night", "artist": "Artist D", "genre": "Jazz", "mood": "Relaxed", "duration": 240},
+        {"id": "s5", "title": "Rock Anthem", "artist": "Artist E", "genre": "Rock", "mood": "Energetic", "duration": 190},
+        {"id": "s6", "title": "Chillwave Dreams", "artist": "Artist F", "genre": "Electronic", "mood": "Relaxed", "duration": 220},
+        {"id": "s7", "title": "Folk Ballad", "artist": "Artist G", "genre": "Acoustic", "mood": "Calm", "duration": 205}
+    ]
+
+    playlist_app = CustomPlaylistGenerator()
+
+    # 1. Set initial preferences
+    print("\n--- Setting Initial Preferences ---")
+    playlist_app.set_preferences(genres=["Pop", "Electronic"], moods=["Happy", "Energetic"])
+
+    # 2. Generate a playlist
+    print("\n--- Generating Playlist ---")
+    playlist_app.generate_playlist(all_songs)
+
+    # 3. Edit genres using keywords
+    print("\n--- Editing Genres ---")
+    playlist_app.edit_genres("Pop", "Indie Pop")
+    playlist_app.edit_genres("Rock", "Classic Rock") # Adding a new genre that wasn't there before
+
+    # Re-generate playlist after genre changes (optional, but good for demonstrating effect)
+    print("\n--- Re-generating Playlist after Genre Edit ---")
+    playlist_app.generate_playlist(all_songs)
+
+    # 4. Set smooth transition timing
+    print("\n--- Setting Transition Timing ---")
+    playlist_app.set_transition_timing(2.5) # 2.5 second transition
+
+    # 5. Play the playlist with transitions
+    print("\n--- Playing Playlist ---")
+    if playlist_app.current_playlist:
+        playlist_app.play_playlist() # Play the first song
+
+    # 6. Suggest artists
+    print("\n--- Suggesting Artists ---")
+    playlist_app.suggest_artists(all_songs)
+
+    # 7. Save and Load Playlist Example
+    print("\n--- Saving and Loading Playlist ---")
+    test_filepath = "my_playlist.json"
+    playlist_app.save_playlist(test_filepath)
+
+    new_generator = CustomPlaylistGenerator()
+    new_generator.load_playlist(test_filepath)
+
+    # Example with no playlist
+    print("\n--- Playing Empty Playlist Example ---")
+    empty_playlist_app = CustomPlaylistGenerator()
+    empty_playlist_app.play_playlist()
